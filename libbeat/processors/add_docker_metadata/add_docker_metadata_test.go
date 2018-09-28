@@ -351,3 +351,7 @@ func (m *mockWatcher) ListenStart() bus.Listener {
 func (m *mockWatcher) ListenStop() bus.Listener {
 	return nil
 }
+
+func (m *mockWatcher) ListenDelete() bus.Listener {
+	return nil
+}
