@@ -79,7 +79,7 @@ func AutodiscoverBuilder(bus bus.Bus, uuid uuid.UUID, c *common.Config) (autodis
 	}
 
 	start := watcher.ListenStart()
-	stop := watcher.ListenStop()
+	stop := watcher.ListenDelete()
 
 	if err := watcher.Start(); err != nil {
 		return nil, err
