@@ -1,0 +1,294 @@
+From fc98158a14a67ddd05ba8bbfab5767eaf1372508 Mon Sep 17 00:00:00 2001
+From: Brian Jones <brjones@revenue.ie>
+Date: Fri, 28 Sep 2018 17:38:12 +0100
+Subject: [PATCH 1/7] Update autoconfigure to stop on Docker delete events
+
+---
+ libbeat/autodiscover/providers/docker/docker.go | 2 +-
+ libbeat/common/docker/watcher.go                | 5 +++++
+ 2 files changed, 6 insertions(+), 1 deletion(-)
+
+diff --git a/libbeat/autodiscover/providers/docker/docker.go b/libbeat/autodiscover/providers/docker/docker.go
+index 4f9478c46..e45e8c13f 100644
+--- a/libbeat/autodiscover/providers/docker/docker.go
++++ b/libbeat/autodiscover/providers/docker/docker.go
+@@ -76,7 +76,7 @@ func AutodiscoverBuilder(bus bus.Bus, c *common.Config) (autodiscover.Provider,
+ 	}
+ 
+ 	start := watcher.ListenStart()
+-	stop := watcher.ListenStop()
++	stop := watcher.ListenDelete()
+ 
+ 	if err := watcher.Start(); err != nil {
+ 		return nil, err
+diff --git a/libbeat/common/docker/watcher.go b/libbeat/common/docker/watcher.go
+index def5b5eed..2833154c6 100644
+--- a/libbeat/common/docker/watcher.go
++++ b/libbeat/common/docker/watcher.go
+@@ -392,3 +392,8 @@ func (w *watcher) ListenStart() bus.Listener {
+ func (w *watcher) ListenStop() bus.Listener {
+ 	return w.bus.Subscribe("stop")
+ }
++
++// ListenDelete returns a bus listener to receive container deleted events, with a `container` key holding it
++func (w *watcher) ListenDelete() bus.Listener {
++	return w.bus.Subscribe("delete")
++}
+-- 
+2.18.0
+
+
+From 54d56b028d8b89bda9fd5d7fe5884fef6a0a2e92 Mon Sep 17 00:00:00 2001
+From: Brian Jones <brjones@revenue.ie>
+Date: Fri, 28 Sep 2018 17:56:21 +0100
+Subject: [PATCH 2/7] Fixed declaration of ListenDelete
+
+---
+ libbeat/common/docker/watcher.go | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/libbeat/common/docker/watcher.go b/libbeat/common/docker/watcher.go
+index 2833154c6..fe07eb414 100644
+--- a/libbeat/common/docker/watcher.go
++++ b/libbeat/common/docker/watcher.go
+@@ -57,6 +57,9 @@ type Watcher interface {
+ 
+ 	// ListenStop returns a bus listener to receive container stopped events, with a `container` key holding it
+ 	ListenStop() bus.Listener
++
++	// ListenDelete returns a bus listener to receive container deleted events, with a `container` key holding it
++	ListenDelete() bus.Listener
+ }
+ 
+ // TLSConfig for docker socket connection
+-- 
+2.18.0
+
+
+From c7949fdec4e8554dcceb2934e37b032589a01fd4 Mon Sep 17 00:00:00 2001
+From: Brian Jones <brjones@revenue.ie>
+Date: Fri, 28 Sep 2018 18:10:12 +0100
+Subject: [PATCH 3/7] Added mock ListenDelete to add_docker_metadata_test
+
+Missed this test in the original change
+---
+ .../add_docker_metadata/add_docker_metadata_test.go           | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/libbeat/processors/add_docker_metadata/add_docker_metadata_test.go b/libbeat/processors/add_docker_metadata/add_docker_metadata_test.go
+index b599730dd..f178b9919 100644
+--- a/libbeat/processors/add_docker_metadata/add_docker_metadata_test.go
++++ b/libbeat/processors/add_docker_metadata/add_docker_metadata_test.go
+@@ -361,3 +361,7 @@ func (m *mockWatcher) ListenStart() bus.Listener {
+ func (m *mockWatcher) ListenStop() bus.Listener {
+ 	return nil
+ }
++
++func (m *mockWatcher) ListenDelete() bus.Listener {
++	return nil
++}
+\ No newline at end of file
+-- 
+2.18.0
+
+
+From 75e363c701985d814ce8170f8fb9259cc42c2c53 Mon Sep 17 00:00:00 2001
+From: Brian Jones <brjones@revenue.ie>
+Date: Fri, 28 Sep 2018 18:45:07 +0100
+Subject: [PATCH 4/7] Ran goimports to add missing newline at the end of the
+ file
+
+---
+ .../processors/add_docker_metadata/add_docker_metadata_test.go  | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/libbeat/processors/add_docker_metadata/add_docker_metadata_test.go b/libbeat/processors/add_docker_metadata/add_docker_metadata_test.go
+index f178b9919..557cf620d 100644
+--- a/libbeat/processors/add_docker_metadata/add_docker_metadata_test.go
++++ b/libbeat/processors/add_docker_metadata/add_docker_metadata_test.go
+@@ -364,4 +364,4 @@ func (m *mockWatcher) ListenStop() bus.Listener {
+ 
+ func (m *mockWatcher) ListenDelete() bus.Listener {
+ 	return nil
+-}
+\ No newline at end of file
++}
+-- 
+2.18.0
+
+
+From 1b4a16b97472e1bd27c052eb70c2327b249d5e9c Mon Sep 17 00:00:00 2001
+From: Brian Jones <brjones@revenue.ie>
+Date: Sat, 29 Sep 2018 15:10:01 +0100
+Subject: [PATCH 5/7] Updated timeout to 70s in integration tests
+
+---
+ filebeat/tests/system/test_autodiscover.py                    | 2 +-
+ .../autodiscover/providers/docker/docker_integration_test.go  | 2 +-
+ metricbeat/tests/system/test_autodiscover.py                  | 4 ++--
+ 3 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/filebeat/tests/system/test_autodiscover.py b/filebeat/tests/system/test_autodiscover.py
+index a85a0bf60..3bf8507a2 100644
+--- a/filebeat/tests/system/test_autodiscover.py
++++ b/filebeat/tests/system/test_autodiscover.py
+@@ -43,7 +43,7 @@ class TestAutodiscover(filebeat.BaseTest):
+         docker_client.containers.run('busybox', 'sleep 1')
+ 
+         self.wait_until(lambda: self.log_contains('Starting runner: input'))
+-        self.wait_until(lambda: self.log_contains('Stopping runner: input'))
++        self.wait_until(lambda: self.log_contains('Stopping runner: input'), max_timeout: 70)
+ 
+         output = self.read_output_json()
+         proc.check_kill_and_wait()
+diff --git a/libbeat/autodiscover/providers/docker/docker_integration_test.go b/libbeat/autodiscover/providers/docker/docker_integration_test.go
+index 082731c9f..b3bffdd11 100644
+--- a/libbeat/autodiscover/providers/docker/docker_integration_test.go
++++ b/libbeat/autodiscover/providers/docker/docker_integration_test.go
+@@ -100,7 +100,7 @@ func checkEvent(t *testing.T, listener bus.Listener, start bool) {
+ 			assert.Equal(t, getValue(e, "docker"), getValue(e, "meta.docker"))
+ 			return
+ 
+-		case <-time.After(10 * time.Second):
++		case <-time.After(70 * time.Second):
+ 			t.Fatal("Timeout waiting for provider events")
+ 			return
+ 		}
+diff --git a/metricbeat/tests/system/test_autodiscover.py b/metricbeat/tests/system/test_autodiscover.py
+index 9bc222637..662b71f69 100644
+--- a/metricbeat/tests/system/test_autodiscover.py
++++ b/metricbeat/tests/system/test_autodiscover.py
+@@ -45,7 +45,7 @@ class TestAutodiscover(metricbeat.BaseTest):
+         self.wait_until(lambda: self.output_count(lambda x: x >= 1))
+         container.stop()
+ 
+-        self.wait_until(lambda: self.log_contains('Stopping runner: memcached'))
++        self.wait_until(lambda: self.log_contains('Stopping runner: memcached'), max_timeout: 70)
+ 
+         output = self.read_output_json()
+         proc.check_kill_and_wait()
+@@ -87,7 +87,7 @@ class TestAutodiscover(metricbeat.BaseTest):
+         self.wait_until(lambda: self.output_count(lambda x: x >= 1))
+         container.stop()
+ 
+-        self.wait_until(lambda: self.log_contains('Stopping runner: memcached'))
++        self.wait_until(lambda: self.log_contains('Stopping runner: memcached'), max_timeout: 70)
+ 
+         output = self.read_output_json()
+         proc.check_kill_and_wait()
+-- 
+2.18.0
+
+
+From b19a1961763260a5f1c829b880669c9ffc7a6a50 Mon Sep 17 00:00:00 2001
+From: Brian Jones <brjones@revenue.ie>
+Date: Sat, 29 Sep 2018 15:38:37 +0100
+Subject: [PATCH 6/7] Fixed timout syntax for python
+
+---
+ filebeat/tests/system/test_autodiscover.py   | 2 +-
+ metricbeat/tests/system/test_autodiscover.py | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/filebeat/tests/system/test_autodiscover.py b/filebeat/tests/system/test_autodiscover.py
+index 3bf8507a2..cb4d2993e 100644
+--- a/filebeat/tests/system/test_autodiscover.py
++++ b/filebeat/tests/system/test_autodiscover.py
+@@ -43,7 +43,7 @@ class TestAutodiscover(filebeat.BaseTest):
+         docker_client.containers.run('busybox', 'sleep 1')
+ 
+         self.wait_until(lambda: self.log_contains('Starting runner: input'))
+-        self.wait_until(lambda: self.log_contains('Stopping runner: input'), max_timeout: 70)
++        self.wait_until(lambda: self.log_contains('Stopping runner: input'), max_timeout=70)
+ 
+         output = self.read_output_json()
+         proc.check_kill_and_wait()
+diff --git a/metricbeat/tests/system/test_autodiscover.py b/metricbeat/tests/system/test_autodiscover.py
+index 662b71f69..f4992a8c7 100644
+--- a/metricbeat/tests/system/test_autodiscover.py
++++ b/metricbeat/tests/system/test_autodiscover.py
+@@ -45,7 +45,7 @@ class TestAutodiscover(metricbeat.BaseTest):
+         self.wait_until(lambda: self.output_count(lambda x: x >= 1))
+         container.stop()
+ 
+-        self.wait_until(lambda: self.log_contains('Stopping runner: memcached'), max_timeout: 70)
++        self.wait_until(lambda: self.log_contains('Stopping runner: memcached'), max_timeout=70)
+ 
+         output = self.read_output_json()
+         proc.check_kill_and_wait()
+@@ -87,7 +87,7 @@ class TestAutodiscover(metricbeat.BaseTest):
+         self.wait_until(lambda: self.output_count(lambda x: x >= 1))
+         container.stop()
+ 
+-        self.wait_until(lambda: self.log_contains('Stopping runner: memcached'), max_timeout: 70)
++        self.wait_until(lambda: self.log_contains('Stopping runner: memcached'), max_timeout=70)
+ 
+         output = self.read_output_json()
+         proc.check_kill_and_wait()
+-- 
+2.18.0
+
+
+From 464eabae1e7db64a49041decb23ba127f8a4f3f5 Mon Sep 17 00:00:00 2001
+From: Brian Jones <brjones@revenue.ie>
+Date: Mon, 1 Oct 2018 08:51:41 +0100
+Subject: [PATCH 7/7] Bumped timeouts to 130s in tests
+
+Cleanup thread runs every 60 seconds and checks for containers that died over 60 seconds ago, so it could be 120 seconds before it's actually noticed. Plust the original timeout of 10s.
+---
+ filebeat/tests/system/test_autodiscover.py                    | 2 +-
+ .../autodiscover/providers/docker/docker_integration_test.go  | 2 +-
+ metricbeat/tests/system/test_autodiscover.py                  | 4 ++--
+ 3 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/filebeat/tests/system/test_autodiscover.py b/filebeat/tests/system/test_autodiscover.py
+index cb4d2993e..c9d055ab4 100644
+--- a/filebeat/tests/system/test_autodiscover.py
++++ b/filebeat/tests/system/test_autodiscover.py
+@@ -43,7 +43,7 @@ class TestAutodiscover(filebeat.BaseTest):
+         docker_client.containers.run('busybox', 'sleep 1')
+ 
+         self.wait_until(lambda: self.log_contains('Starting runner: input'))
+-        self.wait_until(lambda: self.log_contains('Stopping runner: input'), max_timeout=70)
++        self.wait_until(lambda: self.log_contains('Stopping runner: input'), max_timeout=130)
+ 
+         output = self.read_output_json()
+         proc.check_kill_and_wait()
+diff --git a/libbeat/autodiscover/providers/docker/docker_integration_test.go b/libbeat/autodiscover/providers/docker/docker_integration_test.go
+index b3bffdd11..a58c36113 100644
+--- a/libbeat/autodiscover/providers/docker/docker_integration_test.go
++++ b/libbeat/autodiscover/providers/docker/docker_integration_test.go
+@@ -100,7 +100,7 @@ func checkEvent(t *testing.T, listener bus.Listener, start bool) {
+ 			assert.Equal(t, getValue(e, "docker"), getValue(e, "meta.docker"))
+ 			return
+ 
+-		case <-time.After(70 * time.Second):
++		case <-time.After(130 * time.Second):
+ 			t.Fatal("Timeout waiting for provider events")
+ 			return
+ 		}
+diff --git a/metricbeat/tests/system/test_autodiscover.py b/metricbeat/tests/system/test_autodiscover.py
+index f4992a8c7..a35c97f78 100644
+--- a/metricbeat/tests/system/test_autodiscover.py
++++ b/metricbeat/tests/system/test_autodiscover.py
+@@ -45,7 +45,7 @@ class TestAutodiscover(metricbeat.BaseTest):
+         self.wait_until(lambda: self.output_count(lambda x: x >= 1))
+         container.stop()
+ 
+-        self.wait_until(lambda: self.log_contains('Stopping runner: memcached'), max_timeout=70)
++        self.wait_until(lambda: self.log_contains('Stopping runner: memcached'), max_timeout=130)
+ 
+         output = self.read_output_json()
+         proc.check_kill_and_wait()
+@@ -87,7 +87,7 @@ class TestAutodiscover(metricbeat.BaseTest):
+         self.wait_until(lambda: self.output_count(lambda x: x >= 1))
+         container.stop()
+ 
+-        self.wait_until(lambda: self.log_contains('Stopping runner: memcached'), max_timeout=70)
++        self.wait_until(lambda: self.log_contains('Stopping runner: memcached'), max_timeout=130)
+ 
+         output = self.read_output_json()
+         proc.check_kill_and_wait()
+-- 
+2.18.0
+

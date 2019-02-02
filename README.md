@@ -1,3 +1,98 @@
+Changes to include PR 8488 which fixes Docker eventing
+https://github.com/elastic/beats/pull/8488
+
+Build setup:
+
+* Have `golang` installed
+* Update `$PATH` to include the `$GOPATH/bin`
+  * `$GOPATH` defaults to `$HOME/go` when not defined;
+* Have `mage` installed
+
+```
+brew install golang
+export GOPATH=$HOME/go
+export PATH=$GOPATH/bin:$PATH
+go get -u -d github.com/magefile/mage
+cd $GOPATH/src/github.com/magefile/mage
+go run bootstrap.go
+```
+
+Get the `elastic/beats` source;  Needs to be in a proper `$GOPATH` setup.
+
+Can get the source for beats with `go get`;  `-d` means download only.
+
+```
+git clone git@github.com:elastic/beats $GOPATH/src/github.com/elastic/beats
+```
+
+or
+
+Can get the source with `git clone`
+
+```
+go get -u -d github.com/elastic/beats
+```
+
+Change to beats project
+
+
+```
+cd $GOPATH/src/github.com/elastic/beats
+```
+
+Generate patch from PR and apply to desired branch / tag (in this case `6.6.0`);  `e7f50bf0ad8d9976a309ee840b1ca3b751112e53` is the SHA from the fork point of the PR.  Create patch since that SHA.
+
+```
+git fetch git@github.com:brianjones/beats.git master:pr8488
+git checkout pr8488
+git format-patch --stdout e7f50bf0ad8d9976a309ee840b1ca3b751112e53 > pr8488.patch
+git fetch --tags origin
+git checkout -b v6.6.0-pr8488 tags/v6.6.0
+git am pr8488.patch
+```
+
+Pushing patched branch to forked remote to keep track of
+
+```
+git remote add mhoglan git@github.com:mhoglan/beats
+git push mhoglan v6.6.0-pr8488
+```
+
+Move into `filebeat` specifically to build it.  Perform a cross compile for `linux` with `amd64`
+
+```
+cd filebeat/
+GOOS=linux GOARCH=amd64 make
+```
+
+Binary now exists.
+
+```
+❯ file filebeat
+filebeat: ELF 64-bit LSB executable, x86-64, version 1 (SYSV), statically linked, not stripped
+```
+
+Need to create a new docker image with the patched binary.  Will replace the binary in the official image.   `filebeat-patch.Dockerfile` is present to provide this.
+
+```
+docker build -t docker.io/mhoglan/filebeat:6.6.0 -f filebeat-patch.Dockerfile .
+```
+
+Check the version of the binary in the new image
+
+```
+❯ docker run -it --rm docker.io/mhoglan/filebeat:6.6.0 version
+filebeat version 6.6.0 (amd64), libbeat 6.6.0 [cc892dd57a7cbb803205b607220e1aa4294e90fd built 2019-02-02 18:29:38 +0000 UTC]
+```
+
+Push up to DockerHub to share
+
+```
+docker push docker.io/mhoglan/filebeat:6.6.0
+```
+
+---
+
 [![Travis](https://travis-ci.org/elastic/beats.svg?branch=master)](https://travis-ci.org/elastic/beats)
 [![GoReportCard](http://goreportcard.com/badge/elastic/beats)](http://goreportcard.com/report/elastic/beats)
 [![codecov.io](https://codecov.io/github/elastic/beats/coverage.svg?branch=master)](https://codecov.io/github/elastic/beats?branch=master)
